@@ -248,4 +248,4 @@ Na slici su prikazane dve tabele iz baze (Sensor1Reading i Sensor10Reading). Vid
   - Timestamp je poravnat na početak minuta,
   - Ta vrednost predstavlja „konsenzus“ između najnovijih RAW očitavanja.
 
-Uobe tabele se vidi red sa Source = Reconciled za isti vremenski trenutak (09:33:00 UTC), i vrednost je ista, što potvrđuje da se mehanizam poravnanja uspešno izvršava i sinhronizuje sve replike.
+U obe tabele se vidi red sa Source = Reconciled za isti vremenski trenutak (09:33:00 UTC), i vrednost je ista, što potvrđuje da se mehanizam poravnanja uspešno izvršava i sinhronizuje sva ocitavanja.
