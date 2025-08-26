@@ -222,6 +222,8 @@ U nastavku su prikazani rezultati rada sistema. Komunikacija između simulatora 
 
 ## 5.1 Izlaz u konzoli
 
+![Pregled konzole](./images/console_overview.png)
+
 Na levoj strani je ServiceHost koji pokazuje:
 
 - Da je WCF servis uspešno pokrenut na net.tcp://localhost:9001/SensorService,
@@ -235,6 +237,8 @@ Na desnoj strani je Simulator koji prikazuje rad 10 senzora:
 - Intervali slanja su nasumični (1–10 sekundi), što se vidi po neujednačenim vremenskim oznakama.
 
 ## 5.2 Podaci u bazi
+
+![Pregled baze](./images/database_overview.png)
 
 Na slici su prikazane dve tabele iz baze (Sensor1Reading i Sensor10Reading). Vidimo sledeće obrasce:
 
