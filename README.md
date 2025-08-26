@@ -15,7 +15,7 @@ Svakih 60 sekundi tajmer u ServiceHost pokreće ReplicateReconciliationJob. Posa
 
 Baza ima 10 tabela sa istom šemom: Id, TimestampUtc, ValueCelsius, Source. Odvojene tabele modeluju replike koje se periodično poravnavaju. UTC vreme uklanja probleme sa vremenskim zonama i driftom klijenta. Server određuje šta je „najnovije“.
 
-App.config u ServiceHost drži WCF endpoint i binding, connection string i appSettings (Tolerance, period, poravnanje na minut). _Diagnostics_ su isključeni da bi servis radio bez admin prava. 
+App.config u ServiceHost drži WCF endpoint i binding, connection string i appSettings (Tolerance, period, poravnanje na minut). _Diagnostics_ su isključeni da bi servis radio bez admin prava.
 
 Zavisnosti: Simulator → Contracts. ServiceHost → Contracts i → Data. Data → EntityFramework. Contracts → .NET WCF a ne zavisi od EF-a. Simulator ne zavisi od Data sloja.
 
@@ -34,39 +34,40 @@ SensorsSolution/
 Komunikacija između klijenta i servisa. Sadrži service contract (interfejs koji opisuje šta se poziva) i DTO poruke (kako izgleda podatak koji šaljemo). Nema baze ni poslovne logike.
 
 - _ISensorService.cs_ - WCF ugovor (interfejs servisa)
-    
-    Deklariše dostupne metode (npr. `SubmitReading`, `Ping`, opciono read-metode).
 
-   ```csharp
-   [ServiceContract]
-   public interface ISensorService
-   {
-       [OperationContract(IsOneWay = true)]
-       void SubmitReading(SensorReadingDto reading); // klijent šalje, ne čeka odgovor
-   }
-   ```
+  Deklariše dostupne metode (npr. `SubmitReading`, `Ping`, opciono read-metode).
+
+  ```csharp
+  [ServiceContract]
+  public interface ISensorService
+  {
+      [OperationContract(IsOneWay = true)]
+      void SubmitReading(SensorReadingDto reading); // klijent šalje, ne čeka odgovor
+  }
+  ```
 
 - _SensorId.cs_ - identitet senzora (enum S1..S10)
-    
-    Jednoznačno označava koji senzor šalje očitavanje.
-   ```csharp
-   [DataContract]
-   public enum SensorId { [EnumMember] S1 = 1, /* ... */ [EnumMember] S10 = 10 }
-   ```
+
+  Jednoznačno označava koji senzor šalje očitavanje.
+
+  ```csharp
+  [DataContract]
+  public enum SensorId { [EnumMember] S1 = 1, /* ... */ [EnumMember] S10 = 10 }
+  ```
 
 - _SensorReadingDto.cs_ - DTO poruka (podatak koji ide preko mreže)
-    
-    Struktura sa poljima: koji senzor, koja temperatura, vremenske oznake, izvor.
 
-   ```csharp
-   [DataContract]
-   public class SensorReadingDto
-   {
-       [DataMember(Order = 1, IsRequired = true)] public SensorId SensorId { get; set; }
-       [DataMember(Order = 2, IsRequired = true)] public double ValueCelsius { get; set; }
-       // Server popunjava ServerTimestampUtc; Source: "Raw" ili "Reconciled"
-   }
-   ```
+  Struktura sa poljima: koji senzor, koja temperatura, vremenske oznake, izvor.
+
+  ```csharp
+  [DataContract]
+  public class SensorReadingDto
+  {
+      [DataMember(Order = 1, IsRequired = true)] public SensorId SensorId { get; set; }
+      [DataMember(Order = 2, IsRequired = true)] public double ValueCelsius { get; set; }
+      // Server popunjava ServerTimestampUtc; Source: "Raw" ili "Reconciled"
+  }
+  ```
 
 ## 3.2 Sensors.Data
 
@@ -74,126 +75,137 @@ Sloj za podatke (EF6). Definiše šemu baze (10 tabela - po jedna po senzoru), `
 
 - _Entities/SensorXReading.cs (×10)_ – Po jedan entitet/tabela za svaki senzor
 
-    Modeluje 10 replika (1 klasa = 1 tabela). 
-   ```csharp
-   public class Sensor1Reading
-   {
-       public int Id { get; set; }
-       public DateTime TimestampUtc { get; set; }     // vreme upisa (server)
-       public double ValueCelsius { get; set; }       // temperatura
-       public string Source { get; set; }             // "Raw" ili "Reconciled"
-   }
-   ```
+  Modeluje 10 replika (1 klasa = 1 tabela).
+
+  ```csharp
+  public class Sensor1Reading
+  {
+      public int Id { get; set; }
+      public DateTime TimestampUtc { get; set; }     // vreme upisa (server)
+      public double ValueCelsius { get; set; }       // temperatura
+      public string Source { get; set; }             // "Raw" ili "Reconciled"
+  }
+  ```
+
 - _SensorsDbContext.cs_ – EF6 kontekst sa 10 `DbSet<>`
 
-    Mapira entitete na tabele i podešava konvencije.
+  Mapira entitete na tabele i podešava konvencije.
 
-   ```csharp
-   public class SensorsDbContext : DbContext
-   {
-       public SensorsDbContext() : base("name=SensorsDb") { } // connection string ime
+  ```csharp
+  public class SensorsDbContext : DbContext
+  {
+      public SensorsDbContext() : base("name=SensorsDb") { } // connection string ime
 
-       public DbSet<Sensor1Reading> Sensor1Readings { get; set; }
-       // ... do Sensor10Readings
+      public DbSet<Sensor1Reading> Sensor1Readings { get; set; }
+      // ... do Sensor10Readings
 
-       protected override void OnModelCreating(DbModelBuilder modelBuilder)
-       {
-           modelBuilder.Conventions.Remove<PluralizingTableNameConvention>(); // klasa == tabela
-           modelBuilder.Entity<Sensor1Reading>().Property(p => p.Source).IsRequired().HasMaxLength(20);
-           // ... isto za ostale entitete
-       }
-   }
-   ```
+      protected override void OnModelCreating(DbModelBuilder modelBuilder)
+      {
+          modelBuilder.Conventions.Remove<PluralizingTableNameConvention>(); // klasa == tabela
+          modelBuilder.Entity<Sensor1Reading>().Property(p => p.Source).IsRequired().HasMaxLength(20);
+          // ... isto za ostale entitete
+      }
+  }
+  ```
 
 - _Sensors.Data/Migrations/`_ – EF migracije
 
-    Reproducibilna šema baze.
+  Reproducibilna šema baze.
 
-   * `Enable-Migrations -ProjectName Sensors.Data -StartUpProjectName Sensors.ServiceHost`
-   * `Add-Migration InitialCreate -ProjectName Sensors.Data -StartUpProjectName Sensors.ServiceHost`
-   * `Update-Database -ProjectName Sensors.Data -StartUpProjectName Sensors.ServiceHost`
+  - `Enable-Migrations -ProjectName Sensors.Data -StartUpProjectName Sensors.ServiceHost`
+  - `Add-Migration InitialCreate -ProjectName Sensors.Data -StartUpProjectName Sensors.ServiceHost`
+  - `Update-Database -ProjectName Sensors.Data -StartUpProjectName Sensors.ServiceHost`
 
 ## 3.3 Sensors.ServiceHost
-Proces (WCF self-host) sluša na `net.tcp://localhost:9001/SensorService`. Prima `SubmitReading`, server beleži vreme i čuva RAW u bazu. Na svakih 60 s pokreće replikaciono poravnanje (konsenzus) i upisuje Reconciled u svih 10 tabela. 
+
+Proces (WCF self-host) sluša na `net.tcp://localhost:9001/SensorService`. Prima `SubmitReading`, server beleži vreme i čuva RAW u bazu. Na svakih 60 s pokreće replikaciono poravnanje (konsenzus) i upisuje Reconciled u svih 10 tabela.
 
 Timestamp je na serveru te se time eliminišu razlike klijentskih satova. „Najnovije“ je uvek po serveru.
 
 - _Hosting/Program.cs_ - Startuje WCF host i tajmer
-   ```csharp
-   using (var host = new System.ServiceModel.ServiceHost(typeof(SensorService))) // param-less: baseAddress u App.config
-   {
-       host.Open();
-       _timer = new Timer(_ => SafeRun(), null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
-       Console.WriteLine("[ServiceHost] Reconciliation timer started (every 60s).");
-   }
-   ```
-Koristi se parametarski-prazan `ServiceHost` jer je _baseAddress_ u App.config-u. Tako se izbegava greška „already contains an address with scheme net.tcp…“ Dodatno Pošto je naziv projekta `Sensors.ServiceHost`, koristi se puno ime `System.ServiceModel.ServiceHost` da ne dođe do konflikta.
+
+  ```csharp
+  using (var host = new System.ServiceModel.ServiceHost(typeof(SensorService))) // param-less: baseAddress u App.config
+  {
+      host.Open();
+      _timer = new Timer(_ => SafeRun(), null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+      Console.WriteLine("[ServiceHost] Reconciliation timer started (every 60s).");
+  }
+  ```
+
+  Koristi se parametarski-prazan `ServiceHost` jer je _baseAddress_ u App.config-u. Tako se izbegava greška „already contains an address with scheme net.tcp…“ Dodatno Pošto je naziv projekta `Sensors.ServiceHost`, koristi se puno ime `System.ServiceModel.ServiceHost` da ne dođe do konflikta.
 
 - _Jobs/ReplicateReconciliationJob.cs_ - Logika poravnanja (svakih 60 s)
 
-   ```csharp
-   double tolerance = ReadDouble("Tolerance", 5.0);              // ±Tolerance iz appSettings
-   var avg = latest.Average(x => x.value);                       // prosek „najnovijih“ 10 RAW
-   var inRange = latest.Where(x => Math.Abs(x.value - avg) <= tolerance).ToList();
-   var chosen = inRange.Any() ? inRange.OrderByDescending(x => x.ts).First()
-                              : latest.OrderByDescending(x => x.ts).First(); // fallback: najnovija ukupno
-   var insertTs = ReadBool("AlignToWholeMinute", true) ? AlignToMinute(DateTime.UtcNow) : DateTime.UtcNow;
-   // upis „chosen.value“ u SVE tabele sa Source="Reconciled"
-   db.SaveChanges();
-   ```
+  ```csharp
+  double tolerance = ReadDouble("Tolerance", 5.0);              // ±Tolerance iz appSettings
+  var avg = latest.Average(x => x.value);                       // prosek „najnovijih“ 10 RAW
+  var inRange = latest.Where(x => Math.Abs(x.value - avg) <= tolerance).ToList();
+  var chosen = inRange.Any() ? inRange.OrderByDescending(x => x.ts).First()
+                             : latest.OrderByDescending(x => x.ts).First(); // fallback: najnovija ukupno
+  var insertTs = ReadBool("AlignToWholeMinute", true) ? AlignToMinute(DateTime.UtcNow) : DateTime.UtcNow;
+  // upis „chosen.value“ u SVE tabele sa Source="Reconciled"
+  db.SaveChanges();
+  ```
+
 - _Services/SensorService.cs_ - Implementacija WCF ugovora
-   ```csharp
-   var serverNow = DateTime.UtcNow;                              // vreme pečatira server
-   db.SensorXReadings.Add(new SensorXReading {                   // zapis RAW u odgovarajuću tabelu
-       TimestampUtc = serverNow, ValueCelsius = reading.ValueCelsius, Source = "Raw"
-   });
-   // ...
-   return Project(db.SensorXReadings.OrderByDescending(x => x.TimestampUtc).FirstOrDefault(), SensorId.SX);
-   ```
+  ```csharp
+  var serverNow = DateTime.UtcNow;                              // vreme pečatira server
+  db.SensorXReadings.Add(new SensorXReading {                   // zapis RAW u odgovarajuću tabelu
+      TimestampUtc = serverNow, ValueCelsius = reading.ValueCelsius, Source = "Raw"
+  });
+  // ...
+  return Project(db.SensorXReadings.OrderByDescending(x => x.TimestampUtc).FirstOrDefault(), SensorId.SX);
+  ```
 
 ## 3.4 Sensors.Simulator
 
 Konzolni klijent koji simulira 10 senzora. Svaki „radnik“ (task) na 1–10 s generiše nasumičnu temperaturu i poziva servis (`SubmitReading`) preko net.tcp. Simulator nema EF/bazu već priča sa servisom preko WCF ugovora iz `Sensors.Contracts`.
 
 - _Client/Program.cs_ - Pokreće 10 radnika i upravlja gašenjem
-   ```csharp
-   // Ctrl+C -> otkazivanje svih radnika
-   Console.CancelKeyPress += (s, e) => { e.Cancel = true; cts.Cancel(); };
 
-   // Start S1..S10
-   for (int i = 1; i <= 10; i++)
-       tasks.Add(new SensorWorker((SensorId)i, seedBase + i).RunAsync(cts.Token));
+  ```csharp
+  // Ctrl+C -> otkazivanje svih radnika
+  Console.CancelKeyPress += (s, e) => { e.Cancel = true; cts.Cancel(); };
 
-   await Task.WhenAll(tasks);      // sačekaj sve radnike
-   WcfClientFactory.Close();       // uredno zatvori WCF resurse
-   ```
+  // Start S1..S10
+  for (int i = 1; i <= 10; i++)
+      tasks.Add(new SensorWorker((SensorId)i, seedBase + i).RunAsync(cts.Token));
+
+  await Task.WhenAll(tasks);      // sačekaj sve radnike
+  WcfClientFactory.Close();       // uredno zatvori WCF resurse
+  ```
+
 - _Client/SensorWorker.cs_ - Logika jednog senzora
-   ```csharp
-   // Pauza 1–10 s između merenja
-   var delayMs = _rng.Next(1, 11) * 1000;
-   await Task.Delay(delayMs, ct);
 
-   // Nasumična temperatura ~ [18, 30) °C
-   var value = 18.0 + _rng.NextDouble() * 12.0;
+  ```csharp
+  // Pauza 1–10 s između merenja
+  var delayMs = _rng.Next(1, 11) * 1000;
+  await Task.Delay(delayMs, ct);
 
-   // Slanje očitavanja servisu (Source=Raw; server pečatira vreme)
-   WcfClientFactory.GetChannel().SubmitReading(new SensorReadingDto {
-       SensorId = _sensorId, ValueCelsius = value, ClientTimestampUtc = DateTime.UtcNow, Source = "Raw"
-   });
-   ```
+  // Nasumična temperatura ~ [18, 30) °C
+  var value = 18.0 + _rng.NextDouble() * 12.0;
+
+  // Slanje očitavanja servisu (Source=Raw; server pečatira vreme)
+  WcfClientFactory.GetChannel().SubmitReading(new SensorReadingDto {
+      SensorId = _sensorId, ValueCelsius = value, ClientTimestampUtc = DateTime.UtcNow, Source = "Raw"
+  });
+  ```
+
 - _Client/WcfClientFactory.cs_ - Kreira WCF kanal
-   ```csharp
-   // Jedan zajednički ChannelFactory<ISensorService> za sve radnike
-   var binding = new NetTcpBinding();
-   var address = new EndpointAddress("net.tcp://localhost:9001/SensorService");
-   _factory = new ChannelFactory<ISensorService>(binding, address);
 
-   // (Re)otvori kanal po potrebi
-   _channel = _factory.CreateChannel();
-   ((IClientChannel)_channel).Open();
+  ```csharp
+  // Jedan zajednički ChannelFactory<ISensorService> za sve radnike
+  var binding = new NetTcpBinding();
+  var address = new EndpointAddress("net.tcp://localhost:9001/SensorService");
+  _factory = new ChannelFactory<ISensorService>(binding, address);
 
-   // Uredno zatvaranje (Close/Abort) pri izlasku
-   ```
+  // (Re)otvori kanal po potrebi
+  _channel = _factory.CreateChannel();
+  ((IClientChannel)_channel).Open();
+
+  // Uredno zatvaranje (Close/Abort) pri izlasku
+  ```
 
 ## 4) Pokretanje Projekta
 
@@ -204,3 +216,32 @@ Konzolni klijent koji simulira 10 senzora. Svaki „radnik“ (task) na 1–10 s
    - ServiceHost: „WCF service running…“ + „Reconciliation timer started…“.
    - Simulator: „Starting 10 sensor workers…“ + periodične poruke „Sent S#: XX.XX °C“.
 
+## 5) Rezultati
+
+U nastavku su prikazani rezultati rada sistema. Komunikacija između simulatora i servisa u konzoli, kao i stanje podataka u bazi.
+
+## 5.1 Izlaz u konzoli
+
+Na levoj strani je ServiceHost koji pokazuje:
+
+- Da je WCF servis uspešno pokrenut na net.tcp://localhost:9001/SensorService,
+- Da se reconciliation tajmer aktivira svakih 60 sekundi,
+- Log poruke procesa poravnanja (avg=..., chosen=..., ts=...).
+
+Na desnoj strani je Simulator koji prikazuje rad 10 senzora:
+
+- Svaki red prikazuje trenutak kada je određeni senzor poslao temperaturu,
+- Vrednosti se kreću u intervalu od ~18 °C do ~30 °C,
+- Intervali slanja su nasumični (1–10 sekundi), što se vidi po neujednačenim vremenskim oznakama.
+
+## 5.2 Podaci u bazi
+
+Na slici su prikazane dve tabele iz baze (Sensor1Reading i Sensor10Reading). Vidimo sledeće obrasce:
+
+- RAW redovi: Pojedinačna očitavanja senzora, koja imaju oznaku Source = Raw. Njih generiše simulator na svaka 1–10 sekundi.
+- RECONCILED redovi: Na svakih 60 sekundi dodaje se novi red sa Source = Reconciled. Ta vrednost je rezultat poravnanja:
+  - U svim tabelama se upisuje ista vrednost,
+  - Timestamp je poravnat na početak minuta,
+  - Ta vrednost predstavlja „konsenzus“ između najnovijih RAW očitavanja.
+
+Uobe tabele se vidi red sa Source = Reconciled za isti vremenski trenutak (09:33:00 UTC), i vrednost je ista, što potvrđuje da se mehanizam poravnanja uspešno izvršava i sinhronizuje sve replike.
