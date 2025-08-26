@@ -7,14 +7,6 @@ using Sensors.Data.Entities;
 
 namespace Sensors.ServiceHost.Jobs
 {
-    /// <summary>
-    /// Runs periodically. Consensus rule:
-    /// 1) Take the latest RAW reading from each of the 10 sensor tables.
-    /// 2) Compute average of those values (skip sensors with no data yet).
-    /// 3) Pick the MOST RECENT reading whose |value - average| <= tolerance.
-    ///    If none within tolerance, pick the MOST RECENT reading overall.
-    /// 4) Insert that consensus value into ALL 10 tables with Source = "Reconciled".
-    /// </summary>
     public static class ReplicateReconciliationJob
     {
         public static void RunOnce()
@@ -24,7 +16,6 @@ namespace Sensors.ServiceHost.Jobs
 
             using (var db = new SensorsDbContext())
             {
-                // 1) Get latest RAW from each table (null if a sensor hasn't sent yet)
                 var latest = new List<(DateTime ts, double value, int sensorIndex)>();
 
                 var r1 = db.Sensor1Readings.Where(x => x.Source == "Raw").OrderByDescending(x => x.TimestampUtc).FirstOrDefault();
@@ -50,29 +41,24 @@ namespace Sensors.ServiceHost.Jobs
                 AddIfNotNull(latest, r10, 10);
 
                 if (latest.Count == 0)
-                    return; // nothing yet
+                    return; 
 
-                // 2) Average of available values
                 var avg = latest.Average(x => x.value);
 
-                // 3) Choose consensus
                 var inRange = latest.Where(x => Math.Abs(x.value - avg) <= tolerance).ToList();
 
                 (DateTime ts, double value) chosen;
                 if (inRange.Any())
                 {
-                    // Most recent among those within tolerance
                     var pick = inRange.OrderByDescending(x => x.ts).First();
                     chosen = (pick.ts, pick.value);
                 }
                 else
                 {
-                    // Fallback: most recent overall
                     var pick = latest.OrderByDescending(x => x.ts).First();
                     chosen = (pick.ts, pick.value);
                 }
 
-                // 4) Insert consensus into all 10 tables
                 var insertTs = alignToWholeMinute
                     ? AlignToMinute(DateTime.UtcNow)
                     : DateTime.UtcNow;

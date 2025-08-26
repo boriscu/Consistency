@@ -24,7 +24,6 @@ namespace Sensors.Simulator
             var tasks = new List<Task>();
             int seedBase = Environment.TickCount;
 
-            // Start S1..S10
             for (int i = 1; i <= 10; i++)
             {
                 var worker = new SensorWorker((SensorId)i, seedBase + i);
